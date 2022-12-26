@@ -24,7 +24,7 @@
  * --warning-threshold <integer> Checks that report back this severity_id or higher are considered Nagios/Icinga warnings.
  * --critical-threshold <integer> Checks that report back this severity_id or higher are considered Nagios/Icinga errors.
  * --show-hidden <0|1> If set to "0", checks that are hidden in the CiviCRM Status Console will be hidden from Nagios/Icinga.
- * --exclusions <comma-separated list of checks, no spaces> Any checks listed here will be excluded.  E.g. --exclude checkPhpVersion,checkLastCron will suppress the PHP version check and the cron check
+ * --exclude <comma-separated list of checks, no spaces> Any checks listed here will be excluded.  E.g. --exclude checkPhpVersion,checkLastCron will suppress the PHP version check and the cron check
  */
 $shortopts = '';
 $longopts = ['exclude:', 'api-key:', 'site-key:', 'protocol:', 'cms:', 'rest-path:', 'show-hidden:', 'hostname:', 'warning-threshold:', 'critical-threshold:'];
@@ -46,7 +46,7 @@ $exclude = explode(',', $options['exclude'] ?? NULL);
 
 switch (strtolower($cms)) {
   case 'joomla':
-   $path = 'administrator/components/com_civicrm/civicrm/extern/rest.php';
+    $path = 'administrator/components/com_civicrm/civicrm/extern/rest.php';
     break;
 
   case 'wordpress':
@@ -106,13 +106,6 @@ function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hid
   $result = file_get_contents("$prot://$host_address/$path?entity=system&action=check&key=$site_key&api_key=$api_key&json=1&version=3", FALSE, $context);
 
   $a = json_decode($result, TRUE);
-  
-  if (is_null($a)) {
-    echo "Error decoding json:\n\n"; 
-    echo var_dump($result);
-    exit(3);    
-  }
-  
   if ($a["is_error"] != 1 && is_array($a['values'])) {
     // Return status is "OK" untill we find out otherwise.
     $exit = 0;
