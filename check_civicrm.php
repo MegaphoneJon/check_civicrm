@@ -86,13 +86,13 @@ function checkRequired($options) {
 }
 
 function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $exclude = []) {
-  $options = array(
-    'http' => array(
+  $options = [
+    'http' => [
       'header'  => "Content-type: application/x-www-form-urlencoded\r\nUser-Agent: CiviMonitor\r\nX-Requested-With: XMLHttpRequest\r\n",
       //'method'  => 'POST',
       //'content' => http_build_query($request),
-    ),
-  );
+    ],
+  ];
   $context  = stream_context_create($options);
   $result = file_get_contents("$prot://$host_address/$path?entity=system&action=check&key=$site_key&api_key=$api_key&json=1&version=3", FALSE, $context);
 
@@ -113,11 +113,11 @@ function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hid
       }
 
       // first check for missing info
-      $neededKeys = array(
+      $neededKeys = [
         'title' => TRUE,
         'message' => TRUE,
         'name' => TRUE,
-      );
+      ];
       if (array_intersect_key($neededKeys, $attrib) != $neededKeys) {
         $message[] = 'Missing keys: ' . implode(', ', array_diff($neededKeys, array_intersect_key($neededKeys, $attrib))) . '.';
         $exit = 3;
