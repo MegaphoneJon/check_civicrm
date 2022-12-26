@@ -50,8 +50,7 @@ switch (strtolower($cms)) {
     break;
 
   case 'wordpress':
-    $path = 'wp-content/plugins/civicrm/civicrm/extern/rest.php';
-    //$path = 'wp-json/civicrm/v3/rest';
+    $path = 'wp-json/civicrm/v3/rest';
     break;
 
   case 'backdrop':
@@ -63,7 +62,7 @@ switch (strtolower($cms)) {
     break;
 
   case 'drupal8':
-    $path = 'libraries/civicrm/extern/rest.php';
+    $path = 'civicrm/ajax/rest';
     break;
 }
 if (!$path) {
