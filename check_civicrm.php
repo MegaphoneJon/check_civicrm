@@ -45,22 +45,13 @@ $exclude = explode(',', $options['exclude'] ?? NULL);
 
 
 switch (strtolower($cms)) {
-  case 'joomla':
-    $path = 'administrator/components/com_civicrm/civicrm/extern/rest.php';
-    break;
-
   case 'wordpress':
     $path = 'wp-json/civicrm/v3/rest';
     break;
 
+  case 'joomla':
   case 'backdrop':
-    $path = 'modules/civicrm/extern/rest.php';
-    break;
-
   case 'drupal':
-    $path = 'sites/all/modules/civicrm/extern/rest.php';
-    break;
-
   case 'drupal8':
     $path = 'civicrm/ajax/rest';
     break;
