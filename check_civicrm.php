@@ -98,56 +98,54 @@ function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hid
 
   $a = json_decode($result, TRUE);
   $isError = $a["is_error"] ?? FALSE;
-  if (!$isError && ($a['values'] ?? FALSE)) {
-    // Return status is "OK" untill we find out otherwise.
-    $exit = 0;
 
-    $message = [];
-
-    $max_severity = 0;
-    foreach ($a["values"] as $attrib) {
-
-      // Remove excluded checks.
-      if (in_array($attrib['name'], $exclude)) {
-        continue;
-      }
-
-      // first check for missing info
-      $neededKeys = [
-        'title' => TRUE,
-        'message' => TRUE,
-        'name' => TRUE,
-      ];
-      if (array_intersect_key($neededKeys, $attrib) != $neededKeys) {
-        $message[] = 'Missing keys: ' . implode(', ', array_diff($neededKeys, array_intersect_key($neededKeys, $attrib))) . '.';
-        $exit = 3;
-        continue;
-      }
-      // Skip this item if it's hidden and we're hiding hidden items
-      if ($attrib['is_visible'] == 0 && !$show_hidden) {
-        continue;
-      }
-      // Skip this item if it doesn't meet the warning threshold
-      if ($attrib['severity_id'] < $warning_threshold) {
-        continue;
-      }
-      $message[] = htmlspecialchars($attrib['title']) . ': ' . htmlspecialchars($attrib['message']);
-
-      if ($attrib['severity_id'] >= $warning_threshold) {
-        $max_severity = max(1, $max_severity);
-      };
-      if ($attrib['severity_id'] >= $critical_threshold) {
-        $max_severity = max(2, $max_severity);
-      };
-
-    }
-    echo implode(' / ', $message);
-    exit($max_severity);
-  }
   if ($isError) {
     echo $a['error_message'] ?? '';
     exit(2);
   }
-  echo 'Unknown error';
-  exit(3);
+  if (!isset($a['values'])) {
+    echo 'Unknown error - no values returned from CiviCRM';
+    exit(3);
+  }
+
+  $message = [];
+  $max_severity = 0;
+  foreach ($a["values"] as $attrib) {
+
+    // Remove excluded checks.
+    if (in_array($attrib['name'], $exclude)) {
+      continue;
+    }
+
+    // first check for missing info
+    $neededKeys = [
+      'title' => TRUE,
+      'message' => TRUE,
+      'name' => TRUE,
+    ];
+    if (array_intersect_key($neededKeys, $attrib) != $neededKeys) {
+      $message[] = 'Missing keys: ' . implode(', ', array_diff($neededKeys, array_intersect_key($neededKeys, $attrib))) . '.';
+      $max_severity = 3;
+      continue;
+    }
+    // Skip this item if it's hidden and we're hiding hidden items
+    if ($attrib['is_visible'] == 0 && !$show_hidden) {
+      continue;
+    }
+    // Skip this item if it doesn't meet the warning threshold
+    if ($attrib['severity_id'] < $warning_threshold) {
+      continue;
+    }
+    $message[] = htmlspecialchars($attrib['title']) . ': ' . htmlspecialchars($attrib['message']);
+
+    if ($attrib['severity_id'] >= $warning_threshold) {
+      $max_severity = max(1, $max_severity);
+    };
+    if ($attrib['severity_id'] >= $critical_threshold) {
+      $max_severity = max(2, $max_severity);
+    };
+
+  }
+  echo implode(' / ', $message);
+  exit($max_severity);
 }
