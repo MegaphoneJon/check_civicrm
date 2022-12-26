@@ -139,7 +139,7 @@ function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hid
       if ($attrib['severity_id'] < $warning_threshold) {
         continue;
       }
-      $message[] = filter_var($attrib['title'], FILTER_SANITIZE_STRING) . ': ' . filter_var($attrib['message'], FILTER_SANITIZE_STRING);
+      $message[] = htmlspecialchars($attrib['title']) . ': ' . htmlspecialchars($attrib['message']);
 
       if ($attrib['severity_id'] >= $warning_threshold) {
         $max_severity = max(1, $max_severity);
