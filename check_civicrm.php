@@ -97,7 +97,7 @@ function checkRequired($options) {
 function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $exclude = []) {
   $options = array(
     'http' => array(
-      'header'  => "Content-type: application/x-www-form-urlencoded\r\nUser-Agent: CiviMonitor\r\n",
+      'header'  => "Content-type: application/x-www-form-urlencoded\r\nUser-Agent: CiviMonitor\r\nX-Requested-With: XMLHttpRequest\r\n",
       //'method'  => 'POST',
       //'content' => http_build_query($request),
     ),
