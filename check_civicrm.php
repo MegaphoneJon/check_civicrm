@@ -25,9 +25,10 @@
  * --critical-threshold <integer> Checks that report back this severity_id or higher are considered Nagios/Icinga errors.
  * --show-hidden <0|1> If set to "0", checks that are hidden in the CiviCRM Status Console will be hidden from Nagios/Icinga.
  * --exclude <comma-separated list of checks, no spaces> Any checks listed here will be excluded.  E.g. --exclude checkPhpVersion,checkLastCron will suppress the PHP version check and the cron check
+ * --include-disabled <0|1> If set to 1, it will run status checks that have been marked inactive in the CiviCRM database.
  */
 $shortopts = '';
-$longopts = ['exclude:', 'api-key:', 'site-key:', 'protocol:', 'cms:', 'rest-path:', 'show-hidden:', 'hostname:', 'warning-threshold:', 'critical-threshold:'];
+$longopts = ['exclude:', 'api-key:', 'site-key:', 'protocol:', 'cms:', 'rest-path:', 'show-hidden:', 'hostname:', 'warning-threshold:', 'critical-threshold:', 'include-disabled:'];
 $options = getopt($shortopts, $longopts);
 checkRequired($options);
 
@@ -41,26 +42,27 @@ $warning_threshold = $options['warning-threshold'] ?? 2;
 $critical_threshold = $options['critical-threshold'] ?? 4;
 $path = $options['path'] ?? NULL;
 $cms = $options['cms'] ?? NULL;
-$exclude = explode(',', $options['exclude'] ?? NULL);
+$exclude = explode(',', $options['exclude'] ?? '');
+$include_disabled = $options['include-disabled'] ?? FALSE;
 
 
 switch (strtolower($cms)) {
-  case 'wordpress':
-    $path = 'wp-json/civicrm/v3/rest';
-    break;
-
   case 'joomla':
+    $path = 'administrator/components/com_civicrm/civicrm/extern/rest.php';
+
+  // This assumes WP has Clean URLs enabled.
+  case 'wordpress':
   case 'backdrop':
   case 'drupal':
   case 'drupal8':
-    $path = 'civicrm/ajax/rest';
+    $path = 'civicrm/ajax/api4';
     break;
 }
 if (!$path) {
   echo "You must specify either a valid CMS or a REST endpoint path.";
   exit(3);
 }
-systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $exclude);
+systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude);
 
 /**
  * Given an array of command-line options, do some sanity checks, bail if missing required fields etc.
@@ -85,16 +87,23 @@ function checkRequired($options) {
   }
 }
 
-function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $exclude = []) {
-  $options = [
+function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude = []) {
+  $url = "$prot://$host_address/$path/System/check";
+  $params = $include_disabled ? ['includeDisabled' => TRUE] : [];
+  $context = stream_context_create([
     'http' => [
-      'header'  => "Content-type: application/x-www-form-urlencoded\r\nUser-Agent: CiviMonitor\r\nX-Requested-With: XMLHttpRequest\r\n",
-      //'method'  => 'POST',
-      //'content' => http_build_query($request),
+      'method' => 'POST',
+      'header' => [
+        'Content-Type: application/x-www-form-urlencoded',
+        "X-Civi-Auth: Bearer $api_key",
+        "X-Civi-Key: $site_key",
+        "X-Requested-With: XMLHttpRequest",
+        "User-Agent: CiviMonitor",
+      ],
+      'content' => http_build_query(['params' => json_encode($params)]),
     ],
-  ];
-  $context  = stream_context_create($options);
-  $result = file_get_contents("$prot://$host_address/$path?entity=system&action=check&key=$site_key&api_key=$api_key&json=1&version=3", FALSE, $context);
+  ]);
+  $result = file_get_contents($url, FALSE, $context);
 
   $a = json_decode($result, TRUE);
   $isError = $a["is_error"] ?? FALSE;
