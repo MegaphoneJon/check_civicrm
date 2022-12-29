@@ -43,8 +43,8 @@ $warning_threshold = $options['warning-threshold'] ?? 2;
 $critical_threshold = $options['critical-threshold'] ?? 4;
 $path = $options['path'] ?? NULL;
 $cms = $options['cms'] ?? NULL;
-$exclude = $options['exclude'] ? explode(',', $options['exclude']) : [];
-$onlyTheseChecks = $options['only-these-checks'] ? explode(',', $options['only-these-checks']) : [];
+$exclude = $options['exclude'] ?? FALSE ? explode(',', $options['exclude']) : [];
+$onlyTheseChecks = $options['only-these-checks'] ?? FALSE ? explode(',', $options['only-these-checks']) : [];
 $include_disabled = $options['include-disabled'] ?? FALSE;
 
 
