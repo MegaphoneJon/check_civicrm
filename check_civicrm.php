@@ -145,7 +145,8 @@ function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hid
     if ($attrib['severity_id'] < $warning_threshold) {
       continue;
     }
-    $message[] = htmlspecialchars($attrib['title']) . ': ' . htmlspecialchars($attrib['message']);
+    $allowed_tags = ['<p>', '<br>', '<table>', '<th>', '<thead>', '<tr>', '<td>'];
+    $message[] = strip_tags($attrib['title'], $allowed_tags) . ': ' . strip_tags($attrib['message'], $allowed_tags);
 
     if ($attrib['severity_id'] >= $warning_threshold) {
       $max_severity = max(1, $max_severity);
