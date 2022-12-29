@@ -25,10 +25,11 @@
  * --critical-threshold <integer> Checks that report back this severity_id or higher are considered Nagios/Icinga errors.
  * --show-hidden <0|1> If set to "0", checks that are hidden in the CiviCRM Status Console will be hidden from Nagios/Icinga.
  * --exclude <comma-separated list of checks, no spaces> Any checks listed here will be excluded.  E.g. --exclude checkPhpVersion,checkLastCron will suppress the PHP version check and the cron check
+ * --only-these-checks <comma-separated list of checks, no spaces> If specified, only these checks will be run.  Unlike "--exclude", which simply hides results, this prevents other checks from running.
  * --include-disabled <0|1> If set to 1, it will run status checks that have been marked inactive in the CiviCRM database.
  */
 $shortopts = '';
-$longopts = ['exclude:', 'api-key:', 'site-key:', 'protocol:', 'cms:', 'rest-path:', 'show-hidden:', 'hostname:', 'warning-threshold:', 'critical-threshold:', 'include-disabled:'];
+$longopts = ['exclude:', 'api-key:', 'site-key:', 'protocol:', 'cms:', 'rest-path:', 'show-hidden:', 'hostname:', 'warning-threshold:', 'critical-threshold:', 'include-disabled:', 'only-these-checks:'];
 $options = getopt($shortopts, $longopts);
 checkRequired($options);
 
@@ -42,7 +43,8 @@ $warning_threshold = $options['warning-threshold'] ?? 2;
 $critical_threshold = $options['critical-threshold'] ?? 4;
 $path = $options['path'] ?? NULL;
 $cms = $options['cms'] ?? NULL;
-$exclude = explode(',', $options['exclude'] ?? '');
+$exclude = $options['exclude'] ? explode(',', $options['exclude']) : [];
+$onlyTheseChecks = $options['only-these-checks'] ? explode(',', $options['only-these-checks']) : [];
 $include_disabled = $options['include-disabled'] ?? FALSE;
 
 
@@ -62,7 +64,7 @@ if (!$path) {
   echo "You must specify either a valid CMS or a REST endpoint path.";
   exit(3);
 }
-systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude);
+systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude, $onlyTheseChecks);
 
 /**
  * Given an array of command-line options, do some sanity checks, bail if missing required fields etc.
@@ -87,9 +89,12 @@ function checkRequired($options) {
   }
 }
 
-function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude = []) {
+function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude = [], $onlyTheseChecks = []) {
   $url = "$prot://$host_address/$path/System/check";
-  $params = $include_disabled ? ['includeDisabled' => TRUE] : [];
+  $params['includeDisabled'] = $include_disabled;
+  if ($onlyTheseChecks) {
+    $params['where'] = [['name', 'IN', $onlyTheseChecks]];
+  };
   $context = stream_context_create([
     'http' => [
       'method' => 'POST',
