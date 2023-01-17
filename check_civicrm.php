@@ -109,9 +109,8 @@ function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hid
     ],
   ]);
   $result = file_get_contents($url, FALSE, $context);
-
   $a = json_decode($result, TRUE);
-  $isError = $a["is_error"] ?? FALSE;
+  $isError = $a['is_error'] ?? $a['error_code'] ?? FALSE;
 
   if ($isError) {
     echo $a['error_message'] ?? '';
