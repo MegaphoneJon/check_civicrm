@@ -12,9 +12,9 @@
  * Call with the command:
  * /usr/bin/php /usr/lib/nagios/plugins/check_civicrm.php
  *
- * Required arguments:
+ * Required arguments (if protcol is http or https):
  * --hostname <hostname>
- * --protocol <http|https>
+ * --protocol <http|https|cv>
  * --site-key <your site key>
  * --api-key <an API key> must have system.check permission.  Use a key that has "Administer CiviCRM" permission, or better yet install https://github.com/MegaphoneJon/com.megaphonetech.monitoring
  *
@@ -64,13 +64,18 @@ if (!$path) {
   echo "You must specify either a valid CMS or a REST endpoint path.";
   exit(3);
 }
-systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude, $onlyTheseChecks);
+
+$a = getStatusRemote($prot, $host_address, $path, $site_key, $api_key);
+systemCheck($a, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude, $onlyTheseChecks);
 
 /**
  * Given an array of command-line options, do some sanity checks, bail if missing required fields etc.
  * @param array $options
  */
 function checkRequired($options) {
+  if ($options['protocol'] == 'cv') {
+    return;
+  }
   $requiredArguments = ['hostname', 'protocol', 'site-key', 'api-key'];
   $arguments = array_keys($options);
   $missing = NULL;
@@ -89,12 +94,14 @@ function checkRequired($options) {
   }
 }
 
-function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude = [], $onlyTheseChecks = []) {
+function getStatusRemote(string $prot, string $host_address, string $path, string $site_key, string $api_key, ?array $onlyTheseChecks = NULL, bool $include_disabled = FALSE) {
+  // $url = "$prot://$host_address/$path/System/check?XDEBUG_SESSION=VSCODE";
   $url = "$prot://$host_address/$path/System/check";
   $params['includeDisabled'] = $include_disabled;
   if ($onlyTheseChecks) {
     $params['where'] = [['name', 'IN', $onlyTheseChecks]];
   };
+
   $context = stream_context_create([
     'http' => [
       'method' => 'POST',
@@ -105,11 +112,13 @@ function systemCheck($prot, $host_address, $path, $site_key, $api_key, $show_hid
         "X-Requested-With: XMLHttpRequest",
         "User-Agent: CiviMonitor",
       ],
-      'content' => http_build_query(['params' => json_encode($params)]),
     ],
   ]);
   $result = file_get_contents($url, FALSE, $context);
-  $a = json_decode($result, TRUE);
+  return json_decode($result, TRUE);
+}
+function systemCheck(array $a, bool $show_hidden, int $warning_threshold, int $critical_threshold, bool $include_disabled, array $exclude = [], array $onlyTheseChecks = []) {
+
   $isError = $a['is_error'] ?? $a['error_code'] ?? FALSE;
 
   if ($isError) {
