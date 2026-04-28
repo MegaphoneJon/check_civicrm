@@ -18,6 +18,9 @@
  * --site-key <your site key>
  * --api-key <an API key> must have system.check permission.  Use a key that has "Administer CiviCRM" permission, or better yet install https://github.com/MegaphoneJon/com.megaphonetech.monitoring
  *
+ * Required arguments (if protocol is cv):
+ * --webroot <path to webroot>
+ *
  * Optional arguments:
  * --cms <Drupal|Wordpress|Joomla|Backdrop|Drupal8>
  * --rest-path <path to REST endpoint> NOTE: either --cms OR --path is required
@@ -27,46 +30,60 @@
  * --exclude <comma-separated list of checks, no spaces> Any checks listed here will be excluded.  E.g. --exclude checkPhpVersion,checkLastCron will suppress the PHP version check and the cron check
  * --only-these-checks <comma-separated list of checks, no spaces> If specified, only these checks will be run.  Unlike "--exclude", which simply hides results, this prevents other checks from running.
  * --include-disabled <0|1> If set to 1, it will run status checks that have been marked inactive in the CiviCRM database.
+ * --cvpath <path to cv> Only needed if protocol is "cv" and cv is not in the default location of /usr/local/bin/cv
  */
 $shortopts = '';
-$longopts = ['exclude:', 'api-key:', 'site-key:', 'protocol:', 'cms:', 'rest-path:', 'show-hidden:', 'hostname:', 'warning-threshold:', 'critical-threshold:', 'include-disabled:', 'only-these-checks:'];
+$longopts = ['exclude:', 'api-key:', 'site-key:', 'protocol:', 'cms:', 'rest-path:', 'show-hidden:', 'hostname:', 'warning-threshold:', 'critical-threshold:', 'include-disabled:', 'only-these-checks:', 'webroot:', 'cvpath:'];
 $options = getopt($shortopts, $longopts);
 checkRequired($options);
+main($options);
 
-$prot = $options['protocol'];
-$api_key = $options['api-key'];
-$site_key = $options['site-key'];
-$host_address = $options['hostname'];
-// $show_hidden will evaluate to true unless it's a zero.
-$show_hidden = $options['show-hidden'] ?? TRUE;
-$warning_threshold = $options['warning-threshold'] ?? 2;
-$critical_threshold = $options['critical-threshold'] ?? 4;
-$path = $options['path'] ?? NULL;
-$cms = $options['cms'] ?? NULL;
-$exclude = $options['exclude'] ?? FALSE ? explode(',', $options['exclude']) : [];
-$onlyTheseChecks = $options['only-these-checks'] ?? FALSE ? explode(',', $options['only-these-checks']) : [];
-$include_disabled = $options['include-disabled'] ?? FALSE;
+function main(array $options) {
+  $prot = $options['protocol'];
+  $show_hidden = $options['show-hidden'] ?? TRUE;
+  $warning_threshold = $options['warning-threshold'] ?? 2;
+  $critical_threshold = $options['critical-threshold'] ?? 4;
+  $exclude = $options['exclude'] ?? FALSE ? explode(',', $options['exclude']) : [];
+  $onlyTheseChecks = $options['only-these-checks'] ?? FALSE ? explode(',', $options['only-these-checks']) : [];
+  $include_disabled = $options['include-disabled'] ?? FALSE;
 
+  if ($prot == 'cv') {
+    $webroot = $options['webroot'];
+    $cvPath = $options['cvpath'] ?? '/usr/local/bin/cv';
+    $a = getStatusLocal($webroot, $cvPath);
+  }
+  else {
+    $api_key = $options['api-key'];
+    $site_key = $options['site-key'];
+    $host_address = $options['hostname'];
+    $cms = $options['cms'] ?? NULL;
+    $path = $options['path'] ?? getPath($cms);
+    $a = getStatusRemote($prot, $host_address, $path, $site_key, $api_key, $onlyTheseChecks, $include_disabled);
+  }
 
-switch (strtolower($cms)) {
-  case 'joomla':
-    $path = 'administrator/components/com_civicrm/civicrm/extern/rest.php';
-
-  // This assumes WP has Clean URLs enabled.
-  case 'wordpress':
-  case 'backdrop':
-  case 'drupal':
-  case 'drupal8':
-    $path = 'civicrm/ajax/api4';
-    break;
-}
-if (!$path) {
-  echo "You must specify either a valid CMS or a REST endpoint path.";
-  exit(3);
+  systemCheck($a, $show_hidden, $warning_threshold, $critical_threshold, $exclude);
 }
 
-$a = getStatusRemote($prot, $host_address, $path, $site_key, $api_key);
-systemCheck($a, $show_hidden, $warning_threshold, $critical_threshold, $include_disabled, $exclude, $onlyTheseChecks);
+function getPath(?string $cms) {
+  $path = NULL;
+  switch (strtolower($cms)) {
+    case 'joomla':
+      $path = 'administrator/components/com_civicrm/civicrm/extern/rest.php';
+
+    // This assumes WP has Clean URLs enabled.
+    case 'wordpress':
+    case 'backdrop':
+    case 'drupal':
+    case 'drupal8':
+      $path = 'civicrm/ajax/api4';
+      break;
+  }
+  if (!$path) {
+    echo "You must specify either a valid CMS or a REST endpoint path.";
+    exit(3);
+  }
+  return $path;
+}
 
 /**
  * Given an array of command-line options, do some sanity checks, bail if missing required fields etc.
@@ -74,9 +91,11 @@ systemCheck($a, $show_hidden, $warning_threshold, $critical_threshold, $include_
  */
 function checkRequired($options) {
   if ($options['protocol'] == 'cv') {
-    return;
+    $requiredArguments = ['webroot', 'protocol'];
   }
-  $requiredArguments = ['hostname', 'protocol', 'site-key', 'api-key'];
+  else {
+    $requiredArguments = ['hostname', 'protocol', 'site-key', 'api-key'];
+  }
   $arguments = array_keys($options);
   $missing = NULL;
   foreach ($requiredArguments as $required) {
@@ -88,13 +107,13 @@ function checkRequired($options) {
     echo "You are missing the following required arguments:$missing";
     exit(3);
   }
-  if (!in_array($options['protocol'], ['http', 'https'])) {
-    echo '"protocol" argument must be "http" or "https"' .
+  if (!in_array($options['protocol'], ['http', 'https', 'cv'])) {
+    echo '"protocol" argument must be "http", "https", or "cv"' .
     exit(3);
   }
 }
 
-function getStatusRemote(string $prot, string $host_address, string $path, string $site_key, string $api_key, ?array $onlyTheseChecks = NULL, bool $include_disabled = FALSE) {
+function getStatusRemote(string $prot, string $host_address, string $path, string $site_key, string $api_key, array $onlyTheseChecks, bool $include_disabled = FALSE): array {
   // $url = "$prot://$host_address/$path/System/check?XDEBUG_SESSION=VSCODE";
   $url = "$prot://$host_address/$path/System/check";
   $params['includeDisabled'] = $include_disabled;
@@ -117,8 +136,15 @@ function getStatusRemote(string $prot, string $host_address, string $path, strin
   $result = file_get_contents($url, FALSE, $context);
   return json_decode($result, TRUE);
 }
-function systemCheck(array $a, bool $show_hidden, int $warning_threshold, int $critical_threshold, bool $include_disabled, array $exclude = [], array $onlyTheseChecks = []) {
 
+function getStatusLocal(string $webroot, string $cvPath): array {
+  $result = [];
+  exec(escapeshellarg($cvPath) . ' --out=json-strict --cwd=' . escapeshellarg($webroot) . ' api4 System.check', $raw);
+  $result['values'] = json_decode(implode("\n", $raw), TRUE);
+  return $result;
+}
+
+function systemCheck(array $a, bool $show_hidden, int $warning_threshold, int $critical_threshold, array $exclude) {
   $isError = $a['is_error'] ?? $a['error_code'] ?? FALSE;
 
   if ($isError) {
