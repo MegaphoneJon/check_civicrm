@@ -46,11 +46,12 @@ function main(array $options) {
   $exclude = $options['exclude'] ?? FALSE ? explode(',', $options['exclude']) : [];
   $onlyTheseChecks = $options['only-these-checks'] ?? FALSE ? explode(',', $options['only-these-checks']) : [];
   $include_disabled = $options['include-disabled'] ?? FALSE;
+  $params = setParams($onlyTheseChecks, $include_disabled);
 
   if ($prot == 'cv') {
     $webroot = $options['webroot'];
     $cvPath = $options['cvpath'] ?? '/usr/local/bin/cv';
-    $a = getStatusLocal($webroot, $cvPath);
+    $a = getStatusLocal($webroot, $cvPath, $params);
   }
   else {
     $api_key = $options['api-key'];
@@ -58,10 +59,19 @@ function main(array $options) {
     $host_address = $options['hostname'];
     $cms = $options['cms'] ?? NULL;
     $path = $options['path'] ?? getPath($cms);
-    $a = getStatusRemote($prot, $host_address, $path, $site_key, $api_key, $onlyTheseChecks, $include_disabled);
+    $a = getStatusRemote($prot, $host_address, $path, $site_key, $api_key, $params);
   }
 
   systemCheck($a, $show_hidden, $warning_threshold, $critical_threshold, $exclude);
+}
+
+function setParams(array $onlyTheseChecks, bool $include_disabled) : string {
+  $params = [];
+  $params['includeDisabled'] = $include_disabled;
+  if ($onlyTheseChecks) {
+    $params['where'] = [['name', 'IN', $onlyTheseChecks]];
+  };
+  return json_encode($params);
 }
 
 function getPath(?string $cms) {
@@ -69,8 +79,6 @@ function getPath(?string $cms) {
   switch (strtolower($cms)) {
     case 'joomla':
       $path = 'administrator/components/com_civicrm/civicrm/extern/rest.php';
-
-    // This assumes WP has Clean URLs enabled.
     case 'wordpress':
     case 'backdrop':
     case 'drupal':
@@ -113,13 +121,9 @@ function checkRequired($options) {
   }
 }
 
-function getStatusRemote(string $prot, string $host_address, string $path, string $site_key, string $api_key, array $onlyTheseChecks, bool $include_disabled = FALSE): array {
+function getStatusRemote(string $prot, string $host_address, string $path, string $site_key, string $api_key, string $params): array {
   // $url = "$prot://$host_address/$path/System/check?XDEBUG_SESSION=VSCODE";
   $url = "$prot://$host_address/$path/System/check";
-  $params['includeDisabled'] = $include_disabled;
-  if ($onlyTheseChecks) {
-    $params['where'] = [['name', 'IN', $onlyTheseChecks]];
-  };
 
   $context = stream_context_create([
     'http' => [
@@ -131,15 +135,18 @@ function getStatusRemote(string $prot, string $host_address, string $path, strin
         "X-Requested-With: XMLHttpRequest",
         "User-Agent: CiviMonitor",
       ],
+      'content' => http_build_query(['params' => $params]),
     ],
   ]);
-  $result = file_get_contents($url, FALSE, $context);
+  $result = file_get_contents($url, FALSE, $context) ?? '';
   return json_decode($result, TRUE);
 }
 
-function getStatusLocal(string $webroot, string $cvPath): array {
+function getStatusLocal(string $webroot, string $cvPath, string $params): array {
   $result = [];
-  exec(escapeshellarg($cvPath) . ' --out=json-strict --cwd=' . escapeshellarg($webroot) . ' api4 System.check', $raw);
+  $params = $params ? "'$params'" : NULL;
+  $cmd = escapeshellarg($cvPath) . ' --out=json-strict --cwd=' . escapeshellarg($webroot) . ' api4 System.check ' . $params;
+  exec($cmd, $raw);
   $result['values'] = json_decode(implode("\n", $raw), TRUE);
   return $result;
 }
